@@ -22,8 +22,8 @@ default_events:
 # - deployment_status
 # - fork
 # - gollum
-# - issue_comment
-# - issues
+- issue_comment
+- issues
 # - label
 # - milestone
 # - member
@@ -38,12 +38,12 @@ default_events:
 # - pull_request
 # - pull_request_review
 # - pull_request_review_comment
-# - push
+- push
 # - release
-# - repository
+- repository
 # - repository_import
 # - status
-- team
+# - team
 # - team_add
 # - watch
 
@@ -70,7 +70,7 @@ default_permissions:
 
   # Issues and related comments, assignees, labels, and milestones.
   # https://developer.github.com/v3/apps/permissions/#permission-on-issues
-  # issues: read
+  issues: write
 
   # Search repositories, list collaborators, and access repository metadata.
   # https://developer.github.com/v3/apps/permissions/#metadata-permissions
@@ -86,7 +86,7 @@ default_permissions:
 
   # Manage the post-receive hooks for a repository.
   # https://developer.github.com/v3/apps/permissions/#permission-on-repository-hooks
-  # repository_hooks: read
+  repository_hooks: write
 
   # Manage repository projects, columns, and cards.
   # https://developer.github.com/v3/apps/permissions/#permission-on-repository-projects
@@ -118,7 +118,7 @@ default_permissions:
 
   # Manage the post-receive hooks for an organization.
   # https://developer.github.com/v3/apps/permissions/#permission-on-organization-hooks
-  # organization_hooks: read
+  organization_hooks: write
 
   # Get notified of, and update, content references.
   # https://developer.github.com/v3/apps/permissions/
@@ -126,10 +126,10 @@ default_permissions:
 
 
 # The name of the GitHub App. Defaults to the name specified in package.json
-# name: My Probot App
+name: berthbot
 
 # The homepage of your GitHub App.
-# url: https://example.com/
+url: https://armory.io/
 
 # A description of the GitHub App.
 # description: A description of my awesome app
