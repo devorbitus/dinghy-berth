@@ -2,7 +2,16 @@
 // See: https://developer.github.com/v3/git/ to learn more
 
 const yaml = require('js-yaml');
-const { default_config_template } = require('./templates');
+const url = require('url');
+const sendMessage = require('probot-messages');
+const commands = require('probot-commands')
+const { default_config_template, config_template_pull_request_text } = require('./templates');
+
+const DEFAULT_CONFIG_FILE = 'berthbot.yml'
+const DEFAULT_CONFIG_FILE_PATH = '.github/berthbot.yml'
+const DEFAULT_WEBHOOK_PATH = 'webhooks/git/github'
+const DEFAULT_WEBHOOK_SCHEMA = 'https'
+const DEFAULT_ORG_WEBHOOK_NAME = 'web'
 
 
 /**
@@ -74,9 +83,51 @@ async function sendConfigTemplate(context, owner, repo){
     title: 'Adding berthbot config template file!', // the title of the PR
     head: branch, // the branch our chances are on
     base: 'master', // the branch to which you want to merge your changes
-    body: 'Adds berthbot config template file!', // the body of your PR,
+    body: config_template_pull_request_text, // the body of your PR,
     maintainer_can_modify: true // allows maintainers to edit your app's PR
   })
+}
+
+async function offerConfigTemplate(app, context, owner, repo){
+  // No config file found
+  context.log('No config file found')
+
+  await sendMessage(
+    app,
+    context,
+    '[{appName}] Getting started',
+    getting_started_message,
+    {owner, repo}
+  );
+}
+
+async function checkForConfigExistance(repoConfig, app, context, owner, repo) {
+  if (repoConfig == null) {
+    context.log('No config file found')
+    await offerConfigTemplate(app, context, owner, repo)
+    
+  } else {
+    if(repoConfig.spinnakerApiAddress){
+      // Found a config file
+      context.log(`Configuration file found for ${owner}/${repo}`)
+      const webhookSchema = repoConfig.defaultWebhookSchema || DEFAULT_WEBHOOK_SCHEMA
+      const webhookPath = repoConfig.defaultWebhookPath || DEFAULT_WEBHOOK_PATH
+      const fullWebhookUrl = `${webhookSchema}://${repoConfig.spinnakerApiAddress}/${webhookPath}`
+      const webhookConfig = { owner, repo, config: {url: fullWebhookUrl, content_type: 'json'}}
+      
+      try {
+        context.github.repos.createHook(webhookConfig)
+      } catch (e) {
+        app.log.error(e, 'Unable to create webhook, for some reason')
+      }
+      
+    } else {
+      context.log('Config file found but no api configured')
+
+      await offerConfigTemplate(app, context, owner, repo)
+    }
+    
+  }
 }
 
 /**
@@ -86,6 +137,14 @@ async function sendConfigTemplate(context, owner, repo){
 module.exports = app => {
 
   app.log('Yay, the app was loaded!')
+
+  // setup the template command to send the PR with a template
+  commands(app, 'template', async (context, _command) => {
+    const owner = context.payload.repository.owner.login
+    const repo = context.payload.repository.name
+
+    await sendConfigTemplate(context, owner, repo)
+  })
   
   // Opens a PR every time someone installs your app for the first time
   app.on(['installation.created','installation_repositories.added'], check)
@@ -101,27 +160,45 @@ module.exports = app => {
     repos.forEach(async (repository) => {
       const repo = repository.name
 
-      const repoConfig = await loadYaml(context, {owner, repo, path: '.github/berthbot.yml'})
+      // we need to check things manually here because the appropriate pre-authorized context.github is not yet available
+      const repoConfig = await loadYaml(context, {owner, repo, path: DEFAULT_CONFIG_FILE_PATH})
+      context.github = await app.auth(context.payload.installation.id)
 
-      if (repoConfig == null) {
-        // No config file found
-        context.log('No config file found')
-
-        const newContext = Object.create(context)
-        newContext.repo = () => ({owner, repo})
-
-        await sendConfigTemplate(newContext, owner, repo)
-      } else {
-        // Found a config file
-        context.log(`Configuration file found for ${owner}/${repo}`)
-      }
-      
+      await checkForConfigExistance(repoConfig, app, context, owner, repo)
     })
   }
 
-  app.on('*', async context => {
-    context.log({ event: context.event, action: context.payload.action })
+  // Uncomment the below for debugging purposes if needed
+  // app.on('*', async context => {
+  //   context.log({ event: context.event, action: context.payload.action })
+  // })
+
+  app.on(['push'], async context => {
+    const { payload } = context
+    const { repository } = payload
+
+    const defaultBranch = payload.ref === 'refs/heads/' + repository.default_branch
+    if (!defaultBranch) {
+      app.log.debug('Not working on the default branch, returning...')
+      return
+    }
+
+    const settingsModified = payload.commits.find(commit => {
+      return commit.added.includes(DEFAULT_CONFIG_FILE_PATH) ||
+        commit.modified.includes(DEFAULT_CONFIG_FILE_PATH)
+    })
+
+    if (!settingsModified) {
+      app.log.debug(`No changes in '${DEFAULT_CONFIG_FILE_PATH}' detected, returning...`)
+      return
+    }
+    const repoConfig = await context.config(DEFAULT_CONFIG_FILE)
+    const { owner, repo} = context.repo()
+    await checkForConfigExistance(repoConfig, app, context, owner, repo)
+    
   })
+
+  
   // For more information on building apps:
   // https://probot.github.io/docs/
 
