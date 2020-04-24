@@ -55,7 +55,8 @@ async function sendConfigTemplate(context, owner, repo){
   const commitMessage = 'adds berthbot config template file'
   const pullRequestTitle = 'Adding berthbot config template file!'
 
-  await newFileInPullRequest(context, owner, repo, branchName, pathToUse, commitMessage, default_config_template, pullRequestTitle, config_template_pull_request_text);
+  const pr = await newFileInPullRequest(context, owner, repo, branchName, pathToUse, commitMessage, default_config_template, pullRequestTitle, config_template_pull_request_text);
+  return pr
 }
 
 async function sendDinghyfile(context, owner, repo){
@@ -69,7 +70,8 @@ async function sendDinghyfile(context, owner, repo){
   const pullRequestTitle = 'Adding dinghyfile file!'
   const pullRequestBody = 'Here is an example dinghyfile'
 
-  await newFileInPullRequest(context, owner, repo, branchName, pathToUse, commitMessage, dinghyfile_contents, pullRequestTitle, pullRequestBody);
+  const pr = await newFileInPullRequest(context, owner, repo, branchName, pathToUse, commitMessage, dinghyfile_contents, pullRequestTitle, pullRequestBody);
+  return pr
 }
 
 async function newFileInPullRequest(context, owner, repo, branchName, pathToUse, commitMessage, commitFileContents, pullRequestTitle, pullRequestBody) {
@@ -97,7 +99,7 @@ async function newFileInPullRequest(context, owner, repo, branchName, pathToUse,
     branch: branchName // the branch name we used when creating a Git reference
   });
   // create a PR from that branch with the commit of our added file
-  await context.github.pulls.create({
+  const createPR = await context.github.pulls.create({
     repo,
     owner,
     title: pullRequestTitle,
@@ -106,6 +108,8 @@ async function newFileInPullRequest(context, owner, repo, branchName, pathToUse,
     body: pullRequestBody,
     maintainer_can_modify: true
   });
+
+  return createPR
 }
 
 async function offerConfigTemplate(app, context, owner, repo){
@@ -163,7 +167,7 @@ module.exports = app => {
     const owner = context.payload.repository.owner.login
     const repo = context.payload.repository.name
 
-    await sendConfigTemplate(context, owner, repo)
+    const pr = await sendConfigTemplate(context, owner, repo)
 
     await sendMessage(
       app,
@@ -172,7 +176,7 @@ module.exports = app => {
       getting_started_message,
       {owner, 
         repo, 
-        update: 'a new PR has been created to setup the configuration of {appName}',
+        update: `a new PR #${pr.data.number} has been created to setup the configuration of {appName}`,
         updateAfterDays: 0
       }
     );
@@ -182,7 +186,19 @@ module.exports = app => {
     const owner = context.payload.repository.owner.login
     const repo = context.payload.repository.name
 
-    await sendDinghyfile(context, owner, repo)
+    const pr = await sendDinghyfile(context, owner, repo)
+
+    await sendMessage(
+      app,
+      context,
+      '[{appName}] Getting started',
+      getting_started_message,
+      {owner, 
+        repo, 
+        update: `a new PR #${pr.data.number} has been created to add a dinghyfile to this repo`,
+        updateAfterDays: 0
+      }
+    );
   })
 
   // Opens a PR every time someone installs your app for the first time
