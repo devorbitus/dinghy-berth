@@ -167,6 +167,18 @@ module.exports = app => {
     const owner = context.payload.repository.owner.login
     const repo = context.payload.repository.name
 
+    await sendMessage(
+      app,
+      context,
+      '[{appName}] Getting started',
+      getting_started_message,
+      {owner, 
+        repo, 
+        update: `creating a new pull request...`,
+        updateAfterDays: 0
+      }
+    );
+
     const pr = await sendConfigTemplate(context, owner, repo)
 
     await sendMessage(
@@ -185,6 +197,18 @@ module.exports = app => {
   commands(app, 'dinghy', async (context, _command) => {
     const owner = context.payload.repository.owner.login
     const repo = context.payload.repository.name
+
+    await sendMessage(
+      app,
+      context,
+      '[{appName}] Getting started',
+      getting_started_message,
+      {owner, 
+        repo, 
+        update: `creating a new pull request...`,
+        updateAfterDays: 0
+      }
+    );
 
     const pr = await sendDinghyfile(context, owner, repo)
 
