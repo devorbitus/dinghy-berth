@@ -5,13 +5,12 @@ const yaml = require('js-yaml');
 const url = require('url');
 const sendMessage = require('probot-messages');
 const commands = require('probot-commands')
-const { default_config_template, config_template_pull_request_text } = require('./templates');
+const { default_config_template, config_template_pull_request_text, dinghyfile_contents, getting_started_message } = require('./templates');
 
 const DEFAULT_CONFIG_FILE = 'berthbot.yml'
 const DEFAULT_CONFIG_FILE_PATH = '.github/berthbot.yml'
 const DEFAULT_WEBHOOK_PATH = 'webhooks/git/github'
 const DEFAULT_WEBHOOK_SCHEMA = 'https'
-const DEFAULT_ORG_WEBHOOK_NAME = 'web'
 
 
 /**
@@ -51,41 +50,62 @@ async function sendConfigTemplate(context, owner, repo){
   // NOTE: this is not recommended and just shows an example so it can work :)
   //context.log(context.github)
   // test
-  const branch = `berthbot-config-template-${Math.floor(Math.random() * 9999)}`
+  const branchName = `berthbot-config-template-${Math.floor(Math.random() * 9999)}`
+  const pathToUse = '.github/berthbot.yml'
+  const commitMessage = 'adds berthbot config template file'
+  const pullRequestTitle = 'Adding berthbot config template file!'
 
+  await newFileInPullRequest(context, owner, repo, branchName, pathToUse, commitMessage, default_config_template, pullRequestTitle, config_template_pull_request_text);
+}
+
+async function sendDinghyfile(context, owner, repo){
+  // Generates a random number to ensure the git reference isn't already taken
+  // NOTE: this is not recommended and just shows an example so it can work :)
+  //context.log(context.github)
+  // test
+  const branchName = `berthbot-dinghyfile-${Math.floor(Math.random() * 9999)}`
+  const pathToUse = 'dinghyfile'
+  const commitMessage = 'adds dinghyfile file'
+  const pullRequestTitle = 'Adding dinghyfile file!'
+  const pullRequestBody = 'Here is an example dinghyfile'
+
+  await newFileInPullRequest(context, owner, repo, branchName, pathToUse, commitMessage, dinghyfile_contents, pullRequestTitle, pullRequestBody);
+}
+
+async function newFileInPullRequest(context, owner, repo, branchName, pathToUse, commitMessage, commitFileContents, pullRequestTitle, pullRequestBody) {
   // Get current reference in Git
   const reference = await context.github.git.getRef({
-    repo, // the repo
-    owner, // the owner of the repo
+    repo,
+    owner,
     ref: 'heads/master'
-  })
+  });
   // Create a branch
   await context.github.git.createRef({
     repo,
     owner,
-    ref: `refs/heads/${branch}`,
+    ref: `refs/heads/${branchName}`,
     sha: reference.data.object.sha // accesses the sha from the heads/master reference we got
-  })
+  });
   // create a new file
   await context.github.repos.createOrUpdateFile({
     repo,
     owner,
-    path: '.github/berthbot.yml', // the path to your config file
-    message: 'adds berthbot config template file', // a commit message
-    content: Buffer.from(default_config_template).toString('base64'),
+    path: pathToUse,
+    message: commitMessage,
+    content: Buffer.from(commitFileContents).toString('base64'),
     // the content of your file, must be base64 encoded
-    branch // the branch name we used when creating a Git reference
-  })
+    branch: branchName // the branch name we used when creating a Git reference
+  });
   // create a PR from that branch with the commit of our added file
   await context.github.pulls.create({
     repo,
     owner,
-    title: 'Adding berthbot config template file!', // the title of the PR
-    head: branch, // the branch our chances are on
-    base: 'master', // the branch to which you want to merge your changes
-    body: config_template_pull_request_text, // the body of your PR,
-    maintainer_can_modify: true // allows maintainers to edit your app's PR
-  })
+    title: pullRequestTitle,
+    head: branchName,
+    base: 'master',
+    body: pullRequestBody,
+    maintainer_can_modify: true
+  });
 }
 
 async function offerConfigTemplate(app, context, owner, repo){
@@ -144,8 +164,27 @@ module.exports = app => {
     const repo = context.payload.repository.name
 
     await sendConfigTemplate(context, owner, repo)
+
+    await sendMessage(
+      app,
+      context,
+      '[{appName}] Getting started',
+      getting_started_message,
+      {owner, 
+        repo, 
+        update: 'a new PR has been created to setup the configuration of {appName}',
+        updateAfterDays: 0
+      }
+    );
   })
   
+  commands(app, 'dinghy', async (context, _command) => {
+    const owner = context.payload.repository.owner.login
+    const repo = context.payload.repository.name
+
+    await sendDinghyfile(context, owner, repo)
+  })
+
   // Opens a PR every time someone installs your app for the first time
   app.on(['installation.created','installation_repositories.added'], check)
   
